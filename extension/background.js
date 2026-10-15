@@ -11,6 +11,7 @@
   // ========== 状态 ==========
   var state = {
     proxyUrl: 'http://127.0.0.1:9090',
+    apiKey: '',  // fork: 与服务端 API_KEY 一致，随扩展请求鉴权
     connected: false,
     lastError: '',
     lastPush: 0,
@@ -177,6 +178,13 @@
     }
   }
 
+  // ========== 鉴权头（fork: 扩展通道同样需要 API Key） ==========
+  function authHeaders() {
+    var h = { 'Content-Type': 'application/json' };
+    if (state.apiKey) h['Authorization'] = 'Bearer ' + state.apiKey;
+    return h;
+  }
+
   // ========== 推送到服务器 ==========
   async function pushToServer() {
     if (!state.proxyUrl) return;
@@ -202,7 +210,7 @@
       var url = state.proxyUrl.replace(/\/+$/, '') + '/v1/extension/push';
       var resp = await fetch(url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: authHeaders(),
         body: JSON.stringify(data),
       });
 
@@ -303,6 +311,13 @@
         sendResponse({ ok: true });
         break;
 
+      case 'SET_API_KEY':  // fork
+        state.apiKey = msg.key || '';
+        chrome.storage.local.set({ apiKey: state.apiKey });
+        pushToServer();
+        sendResponse({ ok: true });
+        break;
+
       case 'FORCE_PUSH':
         pushToServer();
         sendResponse({ ok: true });
@@ -339,7 +354,7 @@
       }
       try {
         var url = state.proxyUrl.replace(/\/+$/, '') + '/v1/extension/command';
-        var resp = await fetch(url);
+        var resp = await fetch(url, { headers: state.apiKey ? { 'Authorization': 'Bearer ' + state.apiKey } : {} });
         if (resp.ok) {
           var data = await resp.json();
           if (data && data.command === 'get_token') {
@@ -374,8 +389,9 @@
   }, 30000);
 
   // ========== 初始化 ==========
-  chrome.storage.local.get(['proxyUrl', 'customModels'], function(result) {
+  chrome.storage.local.get(['proxyUrl', 'customModels', 'apiKey'], function(result) {
     if (result.proxyUrl) state.proxyUrl = result.proxyUrl;
+    if (result.apiKey) state.apiKey = result.apiKey;  // fork
     if (result.customModels && result.customModels.length > 0) {
       mergeModels(result.customModels);
       console.log(TAG, 'Loaded custom models from storage:', result.customModels.length);

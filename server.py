@@ -41,6 +41,7 @@ log = logging.getLogger("arena2api")
 # 配置
 # ============================================================
 PORT = int(os.environ.get("PORT", "9090"))
+HOST = os.environ.get("HOST", "127.0.0.1")  # fork: 默认只听回环；上游是启动时硬编码 0.0.0.0
 API_KEY = os.environ.get("API_KEY", "").strip()
 ARENA_BASE = "https://arena.ai"
 ARENA_CREATE_EVAL = f"{ARENA_BASE}/nextjs-api/stream/create-evaluation"
@@ -257,13 +258,10 @@ app.add_middleware(
 )
 
 def verify_api_key(request: Request):
-    """Optional API key auth for OpenAI endpoints.
+    """API key auth (fork: 强制开启 —— 未设 API_KEY 时服务拒绝启动，见 __main__) 。
 
-    If API_KEY is set, require: Authorization: Bearer <API_KEY>
+    Require: Authorization: Bearer <API_KEY>
     """
-    if not API_KEY:
-        return
-
     auth_header = request.headers.get("authorization", "")
     expected = f"Bearer {API_KEY}"
     if auth_header != expected:
@@ -276,6 +274,7 @@ def verify_api_key(request: Request):
 @app.post("/v1/extension/push")
 async def extension_push(request: Request):
     """接收扩展推送的 token、cookies、models"""
+    verify_api_key(request)  # fork: 扩展通道同样鉴权
     try:
         data = await request.json()
     except Exception:
@@ -290,13 +289,15 @@ async def extension_push(request: Request):
 
 
 @app.get("/v1/extension/status")
-async def extension_status():
+async def extension_status(request: Request):
+    verify_api_key(request)  # fork: 扩展通道同样鉴权
     return store.status()
 
 
 @app.get("/v1/extension/command")
-async def extension_command():
+async def extension_command(request: Request):
     """Long-polling command endpoint for the extension"""
+    verify_api_key(request)  # fork: 扩展通道同样鉴权
     try:
         # Wait up to 30 seconds for a command
         cmd = await asyncio.wait_for(store.command_queue.get(), timeout=30.0)
@@ -889,7 +890,11 @@ async def health():
 # 启动
 # ============================================================
 if __name__ == "__main__":
-    log.info(f"Starting arena2api on port {PORT}")
-    log.info(f"OpenAI API: http://localhost:{PORT}/v1")
-    log.info("Waiting for Chrome extension to connect...")
-    uvicorn.run(app, host="0.0.0.0", port=PORT, log_level="info")
+    if not API_KEY:
+        log.error("FORK SECURITY: API_KEY is not set — refusing to start without authentication.")
+        log.error("Set it first, e.g.:  export API_KEY=$(python3 -c 'import secrets;print(secrets.token_hex(32))')")
+        raise SystemExit(1)
+    log.info(f"Starting arena2api-fork on {HOST}:{PORT}")
+    log.info(f"OpenAI API: http://{HOST}:{PORT}/v1")
+    log.info("Waiting for browser extension to connect (it must send Authorization: Bearer $API_KEY)...")
+    uvicorn.run(app, host=HOST, port=PORT, log_level="info")

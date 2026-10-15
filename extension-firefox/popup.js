@@ -165,9 +165,18 @@
   loadModels();
 
   // Init
-  chrome.storage.local.get(['proxyUrl'], function(r) {
+  chrome.storage.local.get(['proxyUrl', 'apiKey'], function(r) {
     $('url').value = r.proxyUrl || 'http://127.0.0.1:9090';
+    if (r.apiKey) $('apikey').value = r.apiKey;  // fork
   });
+
+  $('keysave').onclick = function() {  // fork
+    var k = $('apikey').value.trim();
+    chrome.runtime.sendMessage({ type: 'SET_API_KEY', key: k }, function() {
+      $('keysave').textContent = 'OK!';
+      setTimeout(function() { $('keysave').textContent = 'Save'; }, 1000);
+    });
+  };
   refresh();
   setInterval(refresh, 2000);
 })();
