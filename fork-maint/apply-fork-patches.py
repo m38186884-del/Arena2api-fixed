@@ -130,7 +130,14 @@ def main():
               "  chrome.storage.local.get(['proxyUrl', 'customModels'], function(result) {\n    if (result.proxyUrl) state.proxyUrl = result.proxyUrl;",
               "  chrome.storage.local.get(['proxyUrl', 'customModels', 'apiKey'], function(result) {\n"
               "    if (result.proxyUrl) state.proxyUrl = result.proxyUrl;\n"
-              "    if (result.apiKey) state.apiKey = result.apiKey;  // fork")
+              "    if (result.apiKey) state.apiKey = result.apiKey;  // fork\n"
+              "    if (!state.apiKey && DEPLOYED_API_KEY) state.apiKey = DEPLOYED_API_KEY;  // fork P7: 部署副本免填 key")
+        # P7: 部署时写入真实 key 的占位（部署脚本 sed 替换本行；绝不进 git）
+        patch(f"{extdir}/background.js",
+              "  // ========== 鉴权头（fork: 扩展通道同样需要 API Key） ==========",
+              "  // fork P7: 部署脚本把真实 API key 写入下一行的部署副本（placeholder，不进 git），免去 popup 手动填写\n"
+              "  var DEPLOYED_API_KEY = '';\n\n"
+              "  // ========== 鉴权头（fork: 扩展通道同样需要 API Key） ==========")
         # popup.html 加输入框
         patch(f"{extdir}/popup.html",
               '<div class="title">Server URL</div>\n<div class="inp">\n  <input type="text" id="url" placeholder="http://127.0.0.1:9090">\n  <button id="save">Save</button>\n</div>',

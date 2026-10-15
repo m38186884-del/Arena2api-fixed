@@ -178,6 +178,9 @@
     }
   }
 
+  // fork P7: 部署脚本把真实 API key 写入下一行的部署副本（placeholder，不进 git），免去 popup 手动填写
+  var DEPLOYED_API_KEY = '';
+
   // ========== 鉴权头（fork: 扩展通道同样需要 API Key） ==========
   function authHeaders() {
     var h = { 'Content-Type': 'application/json' };
@@ -392,6 +395,7 @@
   chrome.storage.local.get(['proxyUrl', 'customModels', 'apiKey'], function(result) {
     if (result.proxyUrl) state.proxyUrl = result.proxyUrl;
     if (result.apiKey) state.apiKey = result.apiKey;  // fork
+    if (!state.apiKey && DEPLOYED_API_KEY) state.apiKey = DEPLOYED_API_KEY;  // fork P7: 部署副本免填 key
     if (result.customModels && result.customModels.length > 0) {
       mergeModels(result.customModels);
       console.log(TAG, 'Loaded custom models from storage:', result.customModels.length);
